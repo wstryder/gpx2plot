@@ -59,7 +59,8 @@ my $bounds = $gpx->bounds();
 my $iter = $gpx->iterate_points();
 
 # lat1 and lon1 are the previous point and lat2 and lon2 are the current
-# point. The distance between points is calculated from these.
+# point. The distance between points is calculated from these and thus
+# also the speed.
 my $lat1 = 0;
 my $lon1 = 0;
 my $lat2 = 0;
@@ -69,6 +70,12 @@ my $lon2 = 0;
 my $ele = 0;
 my $minELE = 1000000;
 my $maxELE = 0;
+# A very strict uphill and downhill algorithm
+my $elePrev = 0;
+my $eleUpSum = 0;
+my $eleUpMax = 0;
+my $eleDownSum = 0;
+my $eleDownMax = 0;
 
 # Distance between points
 my $distance = 0;
@@ -86,7 +93,6 @@ my $endTime = 0;
 # Speed
 my $speed = 0;
 my $avgSpeed = 0;
-my $minSpeed = 100000;
 my $maxSpeed = 0;
 # smoothSpeed is used to take an average value of the speed, to
 # clean up very noisy gps signal. Without the average, the speed
@@ -112,12 +118,12 @@ print "# The columns in the output are:\n";
 print "# seconds latitude longitude heartRate elevation distance speed smooth\n";
 print "####################################################################\n";
 
-while ( my $pt = $iter->() ) {
+while (my $pt = $iter->()) {
 	$time = $pt->{time};
 	$hr = $pt->{extensions};
 	$ele = $pt->{ele};
 
-	if ( $sT == 0 ) {
+	if ($iterations == 0) {
 		$sT = $time;
 		$startTime = $time;
 	} else {
@@ -127,18 +133,41 @@ while ( my $pt = $iter->() ) {
 	$lat2 = $pt->{lat};
 	$lon2 = $pt->{lon};
 
-	if ( $lat1 == 0 ) {
+	if ($iterations == 0) {
 		$lat1 = $lat2;
 		$lon1 = $lon2;
 		$startLat = $lat1;
 		$startLon = $lon1;
 	}
 
+	# very strict uphill and downhill algorithm
+	if ($iterations == 0) {
+		$elePrev = $ele;
+	}
+	if ($ele == $elePrev) {
+		# elevation does not change, do nothing
+	} elsif ($ele > $elePrev) {
+		# uphill
+		$eleDownSum = 0;
+		$eleUpSum += $ele - $elePrev;
+		if ( $eleUpSum > $eleUpMax ) {
+			$eleUpMax = $eleUpSum;
+		}
+	} elsif ($ele < $elePrev) {
+		# downhill
+		$eleUpSum = 0;
+		$eleDownSum += $elePrev - $ele;
+		if ( $eleDownSum > $eleDownMax ) {
+			$eleDownMax = $eleDownSum;
+		}
+
+	}
+
 	$distance = $geo->distance( 'meter', $lon1,$lat1 => $lon2,$lat2 );
 
 	$speed = $timeSecs - $prevSecs;
 
-	if ( $speed != 0) {
+	if ($speed != 0) {
 		$speed = $distance / $speed;
 	}
 
@@ -164,6 +193,8 @@ while ( my $pt = $iter->() ) {
 
 	$prevSecs = $timeSecs;
 
+	$elePrev = $ele;
+
 	if ($hr > $maxHR) {
 		$maxHR = $hr;
 	}
@@ -184,9 +215,6 @@ while ( my $pt = $iter->() ) {
 		$maxSpeed = $speed;
 	}
 
-	if ($speed < $minSpeed) {
-		$minSpeed = $speed;
-	}
 }
 
 $endTime = $time;
@@ -209,9 +237,10 @@ $endTime = localtime($endTime)->strftime('%F %T');
 # Let's round some numbers
 $totalDistance = round($totalDistance);
 $maxSpeed = round($maxSpeed);
-$minSpeed = round($minSpeed);
 $avgSpeed = round($avgSpeed);
 $avgHR = round($avgHR);
+$eleUpMax = round($eleUpMax);
+$eleDownMax = round($eleDownMax);
 
 print "####################################################################\n";
 print "# gpx2plot 0.1 by Ozfir Izmgzoz, 2021, late\@sapatti.fi \n";
@@ -229,8 +258,6 @@ print "# Duration: ", $duration, "\n";
 print "# Distance: ", $totalDistance, "km\n";
 print "#\n";
 print "# Max speed: ", $maxSpeed, "km/h\n";
-# This is stupid, because at the start the speed is always zero:
-print "# Min speed: ", $minSpeed, "km/h\n";
 print "# Average speed: ", $avgSpeed, "km/h\n";
 print "#\n";
 print "# Max heart rate: ", $maxHR, "bpm\n";
@@ -238,7 +265,9 @@ print "# Min heart rate: ", $minHR, "bpm\n";
 print "# Average heart rate: ", $avgHR, "bpm\n";
 print "#\n";
 print "# Max elevation: ", $maxELE, "m\n";
-print "# Min elevation: ", $minHR, "m\n";
+print "# Min elevation: ", $minELE, "m\n";
+print "# Max uphill: ", $eleUpMax, "m\n";
+print "# Max downhill: ", $eleDownMax, "m\n";
 print "#\n";
 print "# Max latitude: ", $bounds->{maxlat}, "\n";
 print "# Min latitude: ", $bounds->{minlat}, "\n";
