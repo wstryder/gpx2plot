@@ -42,7 +42,15 @@ use Number::Format qw(:subs);
 my $gpxFile = $ARGV[0];
 
 if (not defined $gpxFile) {
-  die "Use:\n\"gpx2plot.pl file.gpx\" to supply a file name for the gpx file.\n";
+  die "Use:\n\"./gpx2plot.pl file.gpx\" to supply a file name for the gpx file.\n";
+}
+
+# For output to CSV
+my $csv = $ARGV[1];
+my $delimiter = " ";
+
+if (defined $csv) {
+	$delimiter = ",";
 }
 
 my $gpx= Geo::Gpx->new(input =>$gpxFile);
@@ -180,7 +188,8 @@ while (my $pt = $iter->()) {
 		$smoothSum += $speed;
 	}
 
-	print $timeSecs, " ", $lat2, " ", $lon2, " ", $hr, " ", $ele, " ", $distance, " ", $speed, " ", $smoothSpeed, "\n";
+	# Print all relevant data to output
+	print $timeSecs, $delimiter, $lat2, $delimiter, $lon2, $delimiter, $hr, $delimiter, $ele, $delimiter, $distance, $delimiter, $speed, $delimiter, $smoothSpeed, "\n";
 
 	$lat1 = $lat2;
 	$lon1 = $lon2;
@@ -275,3 +284,4 @@ print "# Max longitude: ", $bounds->{maxlon}, "\n";
 print "# Min longitude: ", $bounds->{minlon}, "\n";
 print "#\n";
 print "####################################################################\n";
+
